@@ -57,15 +57,16 @@ def process_password_files(file_path, credentials, verbose=False):
                         print(f"Skipping undecodable line in file {file_path}")
                     continue
 
+                decoded_line = decoded_line.strip()
+                line_lower = decoded_line.lower() 
                  # Skip lines that do not start with expected credential keys
-                if not (decoded_line.lower().startswith('url:') or 
-                    decoded_line.lower().startswith('user:') or 
-                    decoded_line.lower().startswith('login:') or 
-                    decoded_line.lower().startswith('pass:') or 
-                    decoded_line.lower().startswith('password:')):
+                if not (line_lower.startswith('url:') or 
+                    line_lower.startswith('user:') or 
+                    line_lower.startswith('login:') or 
+                    line_lower.startswith('pass:') or 
+                    line_lower.startswith('password:')):
                     continue
 
-                line_lower = decoded_line.lower()
                  # Process line if it starts with expected info and matches the expected sequence
                 if expected_next == 'URL' and 'url:' in line_lower:
                     parts = decoded_line.split(':', 1)
