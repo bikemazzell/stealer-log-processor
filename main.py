@@ -1,13 +1,15 @@
 import os
 import sys
 from processes.password_process import process_passwords_in_folder
+from processes.autofill_process import process_autofills_in_folder
 
 def main(root_folder, verbose):
     process_passwords_in_folder(root_folder, verbose)
+    process_autofills_in_folder(root_folder, verbose)
 
 if __name__ == "__main__":
     verbose = False  # Default to non-verbose output
-    args = sys.argv[1:]  # Ignore the script name
+    args = sys.argv[1:]
     
     if '--verbose' in args:
         verbose = True
