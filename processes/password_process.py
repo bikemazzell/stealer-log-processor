@@ -3,8 +3,7 @@ import os
 def process_passwords_in_folder(root_folder, verbose=False):
     password_file_name = 'p_credentials.csv'
 
-    if verbose:
-        print(f"Processing passwords in folder: {root_folder}")
+    print(f"Processing passwords in folder: {root_folder}")
 
     # Initialize list to store paths of output files in subfolders
     output_files = []
@@ -66,34 +65,31 @@ def process_password_files(file_path, credentials, verbose=False):
                     decoded_line.lower().startswith('password:')):
                     continue
 
-                if update_password_info_from_line(decoded_line, expected_next, password_info):
-                    # Determine what is expected next based on the current prefix
-                    if expected_next == 'URL':
-                        expected_next = 'USER'
-                    elif expected_next in ['USER', 'LOGIN']:
-                        expected_next = 'PASS'
-                    else:
-                        # After processing a password line, append the current set of credentials
-                        credentials.append((password_info['USER'], password_info['PASS'], password_info['URL']))
-                        password_info = {'URL': '', 'USER': '', 'PASS': ''}  # Reset for the next set
-                        expected_next = 'URL'  # Expect a URL line for the next set
+                line_lower = decoded_line.lower()
+                 # Process line if it starts with expected info and matches the expected sequence
+                if expected_next == 'URL' and 'url:' in line_lower:
+                    parts = decoded_line.split(':', 1)
+                    if len(parts) == 2:
+                        password_info['URL'] = parts[1].strip()
+                        expected_next = 'USER'  # Next, expect User/Login
 
+                elif expected_next == 'USER' and ('user:' in line_lower or 'login:' in line_lower):
+                    parts = decoded_line.split(':', 1)
+                    if len(parts) == 2:
+                        password_info['USER'] = parts[1].strip()
+                        expected_next = 'PASS'  # Next, expect Password
+
+                elif expected_next == 'PASS' and ('pass:' in line_lower or 'password:' in line_lower):
+                    parts = decoded_line.split(':', 1)
+                    if len(parts) == 2:
+                        password_info['PASS'] = parts[1].strip()
+                        # After capturing Password, append the set to credentials and reset
+                        credentials.append((password_info['USER'], password_info['PASS'], password_info['URL']))
+                        password_info = {'URL': '', 'USER': '', 'PASS': ''}  # Reset for next credential set
+                        expected_next = 'URL'  # Start expecting a URL again for the next set
+                        
     except Exception as e:
         print(f"Error processing file {file_path}: {e}")
-
-def update_password_info_from_line(line, expected_prefix, password_info):
-    line_lower = line.lower()
-
-    # Check if the line starts with the expected prefix and process accordingly
-    if expected_prefix.lower() + ':' in line_lower:
-        parts = line.split(':', 1)
-        if len(parts) == 2:
-            # Update the password_info dict with the trimmed value
-            key = 'URL' if expected_prefix == 'URL' else 'USER' if expected_prefix in ['USER', 'LOGIN'] else 'PASS'
-            password_info[key] = parts[1].strip()
-            return True
-    return False
-
 
 def combine_password_files(output_files, root_folder, output_file_name, verbose=False):
     # Collect all credentials from output files
