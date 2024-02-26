@@ -1,7 +1,6 @@
 import os
 
-def process_autofills_in_folder(root_folder, verbose=False):
-    autofill_file_name = 'a_credentials.csv'
+def process_autofills_in_folder(root_folder, autofill_file_name, verbose=False):
     seen_pairs = set()  # Initialize the set to track seen form/value pairs
 
     print(f"Processing autofills in folder: {root_folder}")

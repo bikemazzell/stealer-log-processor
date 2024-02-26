@@ -1,8 +1,6 @@
 import os
 
-def process_passwords_in_folder(root_folder, verbose=False):
-    password_file_name = 'p_credentials.csv'
-
+def process_passwords_in_folder(root_folder, password_file_name, verbose=False):
     print(f"Processing passwords in folder: {root_folder}")
 
     # Initialize list to store paths of output files in subfolders
@@ -11,14 +9,13 @@ def process_passwords_in_folder(root_folder, verbose=False):
     # Traverse through each subfolder
     subfolders = [f.path for f in os.scandir(root_folder) if f.is_dir()]
     for subfolder in subfolders:
-        output_file_path = process_passwords_in_subfolder(subfolder, verbose)
+        output_file_path = process_passwords_in_subfolder(subfolder, password_file_name, verbose)
         output_files.append(output_file_path)
 
     # Combine all output files into one at root_folder level
     combine_password_files(output_files, root_folder, password_file_name, verbose)
 
-def process_passwords_in_subfolder(subfolder, verbose=False):
-    password_file_name = 'p_credentials.csv'
+def process_passwords_in_subfolder(subfolder, password_file_name, verbose=False):
     
     if verbose:
         print(f"\tsubfolder: {subfolder}")
@@ -30,7 +27,7 @@ def process_passwords_in_subfolder(subfolder, verbose=False):
     for root, _, files in os.walk(subfolder):
         for file_name in files:
             # Check if the file has a valid extension
-            if file_name.lower().endswith(('.csv', '.tsv', '.txt')) and file_name.lower().find('password') != -1:
+            if file_name.lower().endswith(('.csv', '.tsv', '.txt')) and 'password' in file_name.lower():
                 process_password_files(os.path.join(root, file_name), credentials, verbose)
 
     # Write credentials to the output file in subfolder
@@ -57,7 +54,6 @@ def process_password_files(file_path, credentials, verbose=False):
                         print(f"Skipping undecodable line in file {file_path}")
                     continue
 
-                decoded_line = decoded_line.strip()
                 line_lower = decoded_line.lower() 
                  # Skip lines that do not start with expected credential keys
                 if not (line_lower.startswith('url:') or 
