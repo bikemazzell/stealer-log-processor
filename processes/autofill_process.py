@@ -49,7 +49,7 @@ def process_autofill_files(file_path, seen_pairs, verbose=False):
                     # Process FORM/VALUE pairs across lines
                     if line_lower.startswith(('form:', 'name:')):
                         current_key = decoded_line.split(':', 1)[1].strip()
-                    elif (line_lower.startswith(('value:', 'value:')) and current_key is not None):
+                    elif (line_lower.startswith(('value:')) and current_key is not None):
                         current_value = decoded_line.split(':', 1)[1].strip()
                         pair = f"{current_key}:{current_value}"
                         if pair not in seen_pairs:
@@ -62,16 +62,22 @@ def process_autofill_files(file_path, seen_pairs, verbose=False):
             return autofills_output
         return None
 
-    except Exception as e:
+    except IOError as e:
         if verbose:
             print(f"Error processing file {file_path}: {e}")
 
 def combine_autofill_files(output_files, root_folder, output_file_name, verbose=False):
-    combined_autofills = set(output_files)
+    if verbose:
+        print(f"Combining output files into {output_file_name}")
 
     target_file_path = os.path.join(root_folder, output_file_name)
-    with open(target_file_path, 'w', encoding='utf-8') as target_file:
-        for autofill in combined_autofills:
-            target_file.write(autofill + '\n')
-    if verbose:
-        print(f"Wrote combined autofills to: {target_file_path}")
+    try:
+        with open(target_file_path, 'w', encoding='utf-8') as target_file:
+            for autofill in set(output_files):
+                target_file.write(autofill + '\n')
+        if verbose:
+            print(f"Wrote combined autofills to: {target_file_path}")
+     
+    except IOError as e:
+        if verbose:
+            print(f"Error writing to file {target_file_path}: {e}")

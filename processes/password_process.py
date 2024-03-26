@@ -85,11 +85,13 @@ def process_password_files(file_path, credentials, verbose=False):
                         password_info = {'URL': '', 'USER': '', 'PASS': ''}  # Reset for next credential set
                         expected_next = 'URL'  # Start expecting a URL again for the next set
                         
-    except Exception as e:
+    except IOError as e:
         print(f"Error processing file {file_path}: {e}")
 
 def combine_password_files(output_files, root_folder, output_file_name, verbose=False):
-    # Collect all credentials from output files
+    if verbose:
+        print(f"Combining credentials into {output_file_name}")
+
     combined_credentials = set()
     for output_file in output_files:
         with open(output_file, 'r', encoding='utf-8') as file:
@@ -98,12 +100,19 @@ def combine_password_files(output_files, root_folder, output_file_name, verbose=
 
     # Write combined credentials to the target file
     target_file_path = os.path.join(root_folder, output_file_name)
-    with open(target_file_path, 'w', encoding='utf-8') as target_file:
-        for credential in combined_credentials:
-            target_file.write(credential + '\n')
-    if verbose:
-        print(f"Wrote combined credentials to: {target_file_path}")
+    try:
+        with open(target_file_path, 'w', encoding='utf-8') as target_file:
+            for credential in combined_credentials:
+                target_file.write(credential + '\n')
+        if verbose:
+            print(f"Wrote combined credentials to: {target_file_path}")
 
-     # Clean up intermediate p_credentials.csv files from subfolders
+    except IOError as e:
+        if verbose:
+            print(f"Error writing to file {target_file_path}: {e}")
+    
+    # Clean up intermediate p_credentials.csv files from subfolders
     for output_file in output_files:
             os.remove(output_file)
+
+    
