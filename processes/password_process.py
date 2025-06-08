@@ -1,50 +1,14 @@
 import os
+import concurrent.futures
 
-def process_passwords_in_folder(root_folder, password_file_name, verbose=False):
-    print(f"Processing passwords in folder: {root_folder}")
-
-    # Initialize list to store paths of output files in subfolders
-    output_files = []
-
-    # Traverse through each subfolder
-    subfolders = [f.path for f in os.scandir(root_folder) if f.is_dir()]
-    for subfolder in subfolders:
-        output_file_path = process_passwords_in_subfolder(subfolder, password_file_name, verbose)
-        output_files.append(output_file_path)
-
-    # Combine all output files into one at root_folder level
-    combine_password_files(output_files, root_folder, password_file_name, verbose)
-
-def process_passwords_in_subfolder(subfolder, password_file_name, verbose=False):
-    
-    if verbose:
-        print(f"\tsubfolder: {subfolder}")
-
-    # Initialize list to store credentials
-    credentials = []
-
-    # Traverse through files in subfolder
-    for root, _, files in os.walk(subfolder):
-        for file_name in files:
-            # Check if the file has a valid extension
-            if file_name.lower().endswith(('.csv', '.tsv', '.txt')) and 'password' in file_name.lower():
-                process_password_files(os.path.join(root, file_name), credentials, verbose)
-
-    # Write credentials to the output file in subfolder
-    output_file_path = os.path.join(subfolder, password_file_name)
-    with open(output_file_path, 'w', encoding='utf-8') as out_file:
-        for credential in credentials:
-            out_file.write(','.join(credential) + '\n')
-
-    return output_file_path
-
-def process_password_files(file_path, credentials, verbose=False):
+def _extract_passwords_from_file(file_path, verbose=False):
+    """Extracts credentials from a single file, assuming a URL, User, Pass sequence."""
     if verbose:
         print(f"Processing {file_path}")
-    password_info = {'URL': '', 'USER': '', 'PASS': ''}
-    expected_next = 'URL'  # Start expecting a URL
+    credentials = set()
+    password_info = {}
 
-    try:    
+    try:
         with open(file_path, 'rb') as file:
             for line in file:
                 try:
@@ -54,65 +18,66 @@ def process_password_files(file_path, credentials, verbose=False):
                         print(f"Skipping undecodable line in file {file_path}")
                     continue
 
-                line_lower = decoded_line.lower() 
-                 # Skip lines that do not start with expected credential keys
-                if not (line_lower.startswith('url:') or 
-                    line_lower.startswith('user:') or 
-                    line_lower.startswith('login:') or 
-                    line_lower.startswith('pass:') or 
-                    line_lower.startswith('password:')):
-                    continue
+                line_lower = decoded_line.lower()
 
-                 # Process line if it starts with expected info and matches the expected sequence
-                if expected_next == 'URL' and 'url:' in line_lower:
+                # A 'URL' line always starts a new credential entry.
+                if 'url:' in line_lower:
+                    password_info = {}  # Reset for a new entry
                     parts = decoded_line.split(':', 1)
                     if len(parts) == 2:
                         password_info['URL'] = parts[1].strip()
-                        expected_next = 'USER'  # Next, expect User/Login
-
-                elif expected_next == 'USER' and ('user:' in line_lower or 'login:' in line_lower):
-                    parts = decoded_line.split(':', 1)
-                    if len(parts) == 2:
-                        password_info['USER'] = parts[1].strip()
-                        expected_next = 'PASS'  # Next, expect Password
-
-                elif expected_next == 'PASS' and ('pass:' in line_lower or 'password:' in line_lower):
-                    parts = decoded_line.split(':', 1)
-                    if len(parts) == 2:
-                        password_info['PASS'] = parts[1].strip()
-                        # After capturing Password, append the set to credentials and reset
-                        credentials.append((password_info['USER'], password_info['PASS'], password_info['URL']))
-                        password_info = {'URL': '', 'USER': '', 'PASS': ''}  # Reset for next credential set
-                        expected_next = 'URL'  # Start expecting a URL again for the next set
-                        
+                elif 'user:' in line_lower or 'username:' in line_lower or 'login:' in line_lower:
+                    if 'URL' in password_info:
+                        parts = decoded_line.split(':', 1)
+                        if len(parts) == 2:
+                            password_info['USER'] = parts[1].strip()
+                elif 'pass:' in line_lower or 'password:' in line_lower:
+                    if 'URL' in password_info and 'USER' in password_info:
+                        parts = decoded_line.split(':', 1)
+                        if len(parts) == 2:
+                            password_info['PASS'] = parts[1].strip()
+                            credentials.add((password_info['USER'], password_info['PASS'], password_info['URL']))
+                            password_info = {}  # Reset after successful extraction
     except IOError as e:
         print(f"Error processing file {file_path}: {e}")
+    
+    return credentials
 
-def combine_password_files(output_files, root_folder, output_file_name, verbose=False):
-    if verbose:
-        print(f"Combining credentials into {output_file_name}")
+def process_passwords_in_folder(root_folder, password_file_name, verbose=False):
+    """
+    Processes all password files in parallel, extracts credentials,
+    and saves them to a single combined file.
+    """
+    print(f"Processing passwords in folder: {root_folder}")
 
-    combined_credentials = set()
-    for output_file in output_files:
-        with open(output_file, 'r', encoding='utf-8') as file:
-            for line in file:
-                combined_credentials.add(line.strip())
+    files_to_process = []
+    for root, _, files in os.walk(root_folder):
+        for file_name in files:
+            if file_name.lower().endswith(('.csv', '.tsv', '.txt')) and 'password' in file_name.lower():
+                files_to_process.append(os.path.join(root, file_name))
+
+    all_credentials = set()
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_file = {executor.submit(_extract_passwords_from_file, file, verbose): file for file in files_to_process}
+        for future in concurrent.futures.as_completed(future_to_file):
+            file_path = future_to_file[future]
+            try:
+                credentials_from_file = future.result()
+                all_credentials.update(credentials_from_file)
+            except Exception as exc:
+                print(f'{file_path} generated an exception: {exc}')
 
     # Write combined credentials to the target file
-    target_file_path = os.path.join(root_folder, output_file_name)
+    target_file_path = os.path.join(root_folder, password_file_name)
     try:
         with open(target_file_path, 'w', encoding='utf-8') as target_file:
-            for credential in combined_credentials:
-                target_file.write(credential + '\n')
+            # Sort for deterministic output
+            for user, pwd, url in sorted(list(all_credentials)):
+                target_file.write(f"{user},{pwd},{url}\n")
         if verbose:
             print(f"Wrote combined credentials to: {target_file_path}")
-
     except IOError as e:
         if verbose:
             print(f"Error writing to file {target_file_path}: {e}")
-    
-    # Clean up intermediate p_credentials.csv files from subfolders
-    for output_file in output_files:
-            os.remove(output_file)
 
     
